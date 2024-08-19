@@ -545,7 +545,7 @@ vennD <- function (data, columns = NULL, show_elements = FALSE, show_percentage 
           digits = 1, fill_color = ggsci::pal_locuszoom("default", alpha = 1)(4), 
           fill_alpha = 0.5, stroke_color = "black", stroke_alpha = 1, 
           stroke_size = 1, stroke_linetype = "solid", set_name_color = "black", 
-          set_name_size = 6, text_color = "black", text_size = 4, 
+          set_name_size = 6, text_color = "black", text_size = 4, title=NULL,
           label_sep = ",", count_column = NULL, show_outside = c("auto", 
                                                                  "none", "always"), auto_scale = FALSE) 
 {
@@ -573,7 +573,7 @@ vennD <- function (data, columns = NULL, show_elements = FALSE, show_percentage 
                                                 xend = xend, yend = yend), color = text_color, size = 0.5)
   }
   g <- g + scale_fill_manual(values = fill_color) + guides(fill = "none") + 
-    coord_fixed() + theme_void()
+    coord_fixed() + theme_void() + ggtitle(title)
   return(g)
 }
 
