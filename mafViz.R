@@ -231,8 +231,8 @@ extract_mutation_details <- function(maf, genes, includeAll = TRUE) {
       mut_data <- data.frame(
         Gene = gene,
         Sample = gene_data$Tumor_Sample_Barcode,
-        AA_Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$AAChange)),
-        AA_Change = gene_data$AAChange,
+        AA_Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$HGVSp_Short)),
+        HGVSp_Short = gene_data$HGVSp_Short,
         Variant_Class = gene_data$Variant_Classification,
         Variant_Type = gene_data$Variant_Type,
         Chromosome = gene_data$Chromosome,
@@ -291,10 +291,10 @@ create_custom_lollipop <- function(maf, gene, color_by = "Variant_Class",
   mutations <- try({
     data.frame(
       Sample = gene_data$Tumor_Sample_Barcode,
-      Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$AAChange)),
+      Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$HGVSp_Short)),
       Variant_Class = gene_data$Variant_Classification,
       Variant_Type = gene_data$Variant_Type,
-      AA_Change = gene_data$AAChange
+      HGVSp_Short = gene_data$HGVSp_Short
     )
   }, silent = TRUE)
   
@@ -315,7 +315,7 @@ create_custom_lollipop <- function(maf, gene, color_by = "Variant_Class",
   pos_summary <- mutations %>%
     group_by(Position, Variant_Class) %>%
     summarise(Count = n(), Samples = list(unique(Sample)), 
-              Changes = list(unique(AA_Change)), .groups = 'drop')
+              Changes = list(unique(HGVSp_Short)), .groups = 'drop')
   
   # Get top mutations for labeling
   top_mutations <- pos_summary %>%
@@ -392,10 +392,10 @@ create_comparative_mutation_plot <- function(maf, genes, color_by = "Variant_Cla
       mut_data <- data.frame(
         Gene = gene,
         Sample = gene_data$Tumor_Sample_Barcode,
-        Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$AAChange)),
+        Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$HGVSp_Short)),
         Variant_Class = gene_data$Variant_Classification,
         Variant_Type = gene_data$Variant_Type,
-        AA_Change = gene_data$AAChange
+        HGVSp_Short = gene_data$HGVSp_Short
       )
       mut_data
     }, silent = TRUE)
@@ -501,10 +501,10 @@ create_mutation_map <- function(maf, gene, color_by = "Variant_Classification",
   mutations <- try({
     data.frame(
       Sample = gene_data$Tumor_Sample_Barcode,
-      Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$AAChange)),
+      Position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$HGVSp_Short)),
       Variant_Classification = gene_data$Variant_Classification,
       Variant_Type = gene_data$Variant_Type,
-      AA_Change = gene_data$AAChange
+      HGVSp_Short = gene_data$HGVSp_Short
     )
   }, silent = TRUE)
   
@@ -524,7 +524,7 @@ create_mutation_map <- function(maf, gene, color_by = "Variant_Classification",
   # Summarize mutations by position
   pos_summary <- mutations %>%
     group_by(Position, Variant_Classification) %>%
-    summarise(Count = n(), Changes = list(unique(AA_Change)), .groups = 'drop')
+    summarise(Count = n(), Changes = list(unique(HGVSp_Short)), .groups = 'drop')
   
   # Create the plot
   p <- ggplot() +
