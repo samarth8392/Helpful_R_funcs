@@ -317,6 +317,7 @@ pos_summary <- mutations %>%
     Count = n(),
     Samples = paste(unique(Sample), collapse = ", "),
     Changes = paste(unique(HGVSp_Short), collapse = ", "),
+    Variant_Class = paste(unique(Variant_Class), collapse = ", "),
     .groups = "drop"
   )
   
