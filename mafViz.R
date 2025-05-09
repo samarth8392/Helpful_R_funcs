@@ -323,7 +323,7 @@ create_custom_lollipop <- function(maf, gene, color_by = "Variant_Class",
   
   # Get top mutations for labeling
   top_mutations <- pos_summary %>%
-    arrange(desc(Count)) %>%
+    arrange(dplyr::desc(Count)) %>%
     head(label_top)
   
   # Create the plot
