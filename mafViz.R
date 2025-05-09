@@ -98,9 +98,9 @@ visualize_gene_mutations <- function(maf,
       mutations <- try({
         data.frame(
           sample = gene_data$Tumor_Sample_Barcode,
-          position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$AAChange)),
+          position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$HGVSp_Short)),
           type = gene_data$Variant_Classification,
-          change = gene_data$AAChange,
+          change = gene_data$HGVSp_Short,
           vaf = ifelse(!is.null(gene_data$t_vaf), gene_data$t_vaf, NA),
           impact = gene_data$IMPACT
         )
@@ -138,9 +138,9 @@ visualize_gene_mutations <- function(maf,
       mutations <- try({
         data.frame(
           sample = gene_data$Tumor_Sample_Barcode,
-          position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$AAChange)),
+          position = as.numeric(gsub(".*p\\.[A-Za-z]*(\\d+).*", "\\1", gene_data$HGVSp_Short)),
           type = gene_data$Variant_Classification,
-          change = gene_data$AAChange,
+          change = gene_data$HGVSp_Short,
           vaf = ifelse(!is.null(gene_data$t_vaf), gene_data$t_vaf, NA),
           impact = gene_data$IMPACT
         )
