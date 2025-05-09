@@ -643,4 +643,67 @@ create_mutation_heatmap <- function(maf, genes, color_palette = NULL) {
 # mutation_details <- extract_mutation_details(maf, genes_of_interest)
 # 
 # # Create a mutation heatmap
-# heatmap <- create
+# heatmap <- create_mutation_heatmap(maf, genes_of_interest)
+# 
+# # Visualize the plots
+# print(mutation_maps$TP53)
+# print(comp_plot)
+# print(heatmap)
+# 
+# # Analyze hotspots across multiple genes
+# for(gene in genes_of_interest) {
+#   map <- create_mutation_map(maf, gene, min_freq = 3)
+#   print(map)
+# }
+# 
+# # Save results to PDF
+# pdf("mutation_analysis_results.pdf", width = 10, height = 8)
+# 
+# # Save all visualizations
+# for(gene in names(mutation_maps)) {
+#   if(!is.null(mutation_maps[[gene]])) {
+#     print(mutation_maps[[gene]])
+#   }
+# }
+# 
+# print(comp_plot)
+# print(heatmap)
+# 
+# # Generate lollipop plots with domains for key genes
+# for(gene in genes_of_interest) {
+#   lollipop <- visualize_gene_mutations(maf, gene, plotType = "lollipop", showDomains = TRUE)
+#   if(!is.null(lollipop[[gene]])) {
+#     print(lollipop[[gene]])
+#   }
+# }
+# 
+# # Create oncostrips for the genes
+# onco_plots <- visualize_gene_mutations(maf, genes_of_interest, plotType = "oncostrip")
+# for(gene in names(onco_plots)) {
+#   if(!is.null(onco_plots[[gene]])) {
+#     print(onco_plots[[gene]])
+#   }
+# }
+# 
+# # Close PDF device
+# dev.off()
+# 
+# # Export mutation details to CSV
+# write.csv(mutation_details, "mutation_details.csv", row.names = FALSE)
+# 
+# # Create a summary report
+# mutation_summary <- mutation_details %>%
+#   group_by(Gene, Variant_Class) %>%
+#   summarise(Count = n(), 
+#             Samples = n_distinct(Sample),
+#             .groups = 'drop')
+# 
+# # Print summary
+# print(mutation_summary)
+# 
+# # Optional - Create additional custom visualizations for specific purposes
+# # For example, a normalized comparison plot
+# norm_comp <- create_comparative_mutation_plot(maf, genes_of_interest, normalize = TRUE)
+# print(norm_comp)
+#
+# # End of example script
