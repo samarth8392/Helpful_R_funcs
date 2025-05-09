@@ -314,8 +314,10 @@ create_custom_lollipop <- function(maf, gene, color_by = "Variant_Class",
   # Summarize mutations by position
   pos_summary <- mutations %>%
     group_by(Position, Variant_Class) %>%
-    summarise(Count = n(), Samples = list(unique(Sample)), 
-              Changes = list(unique(HGVSp_Short)), .groups = 'drop')
+    summarise(Count = dplyr::n(), 
+              Samples = list(unique(Sample)), 
+              Changes = list(unique(HGVSp_Short)), 
+              .groups = 'drop')
   
   # Get top mutations for labeling
   top_mutations <- pos_summary %>%
