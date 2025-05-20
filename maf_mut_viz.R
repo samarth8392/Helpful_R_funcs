@@ -15,6 +15,7 @@
 visualize_maf_aa_grid <- function(maf, 
                                  genes, 
                                  output_dir = NULL,
+                                 title = "",
                                  height = 8,
                                  width = 10,
                                  max_genes_per_row = 3,
@@ -246,6 +247,7 @@ visualize_maf_aa_grid <- function(maf,
 # Alternative implementation using facets instead of grid for genes
 visualize_maf_aa_facet <- function(maf, 
                                   genes, 
+                                  title= "",
                                   output_dir = NULL,
                                   height = 10,
                                   width = 12,
@@ -382,7 +384,7 @@ visualize_maf_aa_facet <- function(maf,
     ) +
     ggplot2::facet_wrap(~ Hugo_Symbol, scales = "free_x") +
     ggplot2::labs(
-      title = "Somatic Mutations by Gene",
+      title = title,
       x = "Amino Acid Position", 
       y = "Sample"
     ) +
