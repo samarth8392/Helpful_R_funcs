@@ -1,6 +1,6 @@
 #' Visualize mutations on a grid for specified genes from a MAF file
 #'
-#' @param maf MAF object from maftools
+#' @param maf_input Either a MAF object from maftools or a data frame with MAF format data
 #' @param genes Character vector of gene symbols to visualize
 #' @param output_dir Directory to save plots (NULL = don't save, just display)
 #' @param height Plot height in inches when saving to PDF (default: 8)
@@ -12,10 +12,9 @@
 #' @return Invisibly returns the ggplot object
 #' @export
 #'
-visualize_maf_aa_grid <- function(maf, 
+visualize_maf_aa_grid <- function(maf_input, 
                                  genes, 
                                  output_dir = NULL,
-                                 title = "",
                                  height = 8,
                                  width = 10,
                                  max_genes_per_row = 3,
@@ -33,7 +32,15 @@ visualize_maf_aa_grid <- function(maf,
   
   # Access the MAF data
   message("Reading MAF data...")
-  maf_data <- maf@data
+  if (inherits(maf_input, "MAF")) {
+    # If input is a MAF object from maftools
+    maf_data <- maf_input@data
+  } else if (is.data.frame(maf_input)) {
+    # If input is already a data frame
+    maf_data <- maf_input
+  } else {
+    stop("Input must be either a MAF object from maftools or a data frame in MAF format")
+  }
   
   # Check if required columns exist
   required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", "HGVSp_Short")
@@ -244,10 +251,22 @@ visualize_maf_aa_grid <- function(maf,
   ))
 }
 
-# Alternative implementation using facets instead of grid for genes
-visualize_maf_aa_facet <- function(maf, 
+#' Alternative implementation using facets instead of grid for genes
+#'
+#' @param maf_input Either a MAF object from maftools or a data frame with MAF format data
+#' @param genes Character vector of gene symbols to visualize
+#' @param output_dir Directory to save plots (NULL = don't save, just display)
+#' @param height Plot height in inches when saving to PDF (default: 10)
+#' @param width Plot width in inches when saving to PDF (default: 12)
+#' @param text_size Size of the HGVSp label text (default: 2.5)
+#' @param point_size Size of mutation points (default: 3)
+#'
+#' @return Invisibly returns the ggplot object
+#' @export
+#'
+visualize_maf_aa_facet <- function(maf_input, 
                                   genes, 
-                                  title= "",
+                                  title="",
                                   output_dir = NULL,
                                   height = 10,
                                   width = 12,
@@ -265,7 +284,15 @@ visualize_maf_aa_facet <- function(maf,
   
   # Access the MAF data
   message("Reading MAF data...")
-  maf_data <- maf@data
+  if (inherits(maf_input, "MAF")) {
+    # If input is a MAF object from maftools
+    maf_data <- maf_input@data
+  } else if (is.data.frame(maf_input)) {
+    # If input is already a data frame
+    maf_data <- maf_input
+  } else {
+    stop("Input must be either a MAF object from maftools or a data frame in MAF format")
+  }
   
   # Check if required columns exist
   required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", "HGVSp_Short")
@@ -416,9 +443,12 @@ visualize_maf_aa_facet <- function(maf,
 
 # Example usage:
 # library(maftools)
+# 
+# # Using a MAF object:
 # maf <- read.maf("example.maf")
 # genes_of_interest <- c("TP53", "PIK3CA", "ARID1A")
 # visualize_maf_aa_grid(maf, genes_of_interest, output_dir = "plots")
 # 
-# # Or using facets:
-# visualize_maf_aa_facet(maf, genes_of_interest, output_dir = "plots")
+# # Or using a data frame directly:
+# maf_df <- maf@data
+# visualize_maf_aa_facet(maf_df, genes_of_interest, output_dir = "plots")
