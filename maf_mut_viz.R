@@ -271,6 +271,7 @@ visualize_maf_aa_grid <- function(maf_input,
 visualize_maf_aa_facet <- function(maf_input, 
                                   genes, 
                                   sample_order = NULL,
+                                  patient_order = NULL,  # New parameter for patient ordering
                                   title = "",
                                   file_name = "maf_muts",
                                   output_dir = NULL,
@@ -303,11 +304,23 @@ visualize_maf_aa_facet <- function(maf_input,
   }
   
   # Check if required columns exist
-  required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", "HGVSp_Short")
+  required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", "HGVSp_Short", "PatientID")
   missing_cols <- required_cols[!required_cols %in% colnames(maf_data)]
   if (length(missing_cols) > 0) {
     stop(paste0("MAF data is missing required columns: ", 
                 paste(missing_cols, collapse = ", ")))
+  }
+  
+  # Check if CLIN_SIG column exists, if not create it with default values
+  if (!"CLIN_SIG" %in% colnames(maf_data)) {
+    warning("CLIN_SIG column not found. Creating default column with all variants as 'unknown'.")
+    maf_data$CLIN_SIG <- "unknown"
+  }
+  
+  # Check if PolyPhen column exists, if not create it with default values
+  if (!"PolyPhen" %in% colnames(maf_data)) {
+    warning("PolyPhen column not found. Creating default column with all variants as NA.")
+    maf_data$PolyPhen <- NA
   }
   
   # Setup custom variant classification colors
@@ -375,6 +388,26 @@ visualize_maf_aa_facet <- function(maf_input,
   # Add a shortened version of HGVSp_Short for labeling (without the 'p.' prefix)
   gene_maf$hgvsp_label <- gsub("^p\\.", "", gene_maf$HGVSp_Short)
   
+  # Create pathogenic indicator (case-insensitive, check if "pathogenic" appears anywhere in CLIN_SIG)
+  gene_maf$is_pathogenic <- grepl("pathogenic", tolower(gene_maf$CLIN_SIG))
+  
+  # Extract numeric PolyPhen scores from the formatted strings
+  gene_maf$polyphen_score <- NA
+  
+  # Extract numeric values from PolyPhen strings like "benign(0.003)" or "probably_damaging(0.997)"
+  polyphen_pattern <- "\\(([0-9.]+)\\)"
+  matches <- regmatches(gene_maf$PolyPhen, regexec(polyphen_pattern, gene_maf$PolyPhen))
+  
+  for (i in seq_along(matches)) {
+    if (length(matches[[i]]) > 1) {
+      gene_maf$polyphen_score[i] <- as.numeric(matches[[i]][2])
+    }
+  }
+  
+  # Create PolyPhen border color based on score
+  gene_maf$polyphen_border <- ifelse(is.na(gene_maf$polyphen_score), "black",
+                                    ifelse(gene_maf$polyphen_score > 0.85, "red4", "olivedrab"))
+  
   # For any variant type not in our predefined colors, add a default color
   unique_variants <- unique(gene_maf$Variant_Classification)
   missing_variants <- setdiff(unique_variants, names(variant_colors))
@@ -389,60 +422,152 @@ visualize_maf_aa_facet <- function(maf_input,
   snv_types <- c("Missense_Mutation", "Nonsense_Mutation", "Silent")
   gene_maf$variant_type <- ifelse(gene_maf$Variant_Classification %in% snv_types, "SNV", "INDEL")
   
-  # Order samples for vertical axis
+  # Order samples and patients for vertical axis
+  unique_patients <- unique(gene_maf$PatientID)
   unique_samples <- unique(gene_maf$Tumor_Sample_Barcode)
   
-  # Check if custom sample order is provided
-  if (!is.null(sample_order)) {
-    # Validate the sample order
-    invalid_samples <- setdiff(sample_order, unique_samples)
-    if (length(invalid_samples) > 0) {
-      warning(paste0("The following samples in sample_order were not found in the data: ", 
-                     paste(invalid_samples, collapse = ", ")))
+  # Create patient-sample mapping
+  patient_sample_map <- gene_maf %>%
+    dplyr::select(PatientID, Tumor_Sample_Barcode) %>%
+    dplyr::distinct()
+  
+  # Handle patient ordering
+  if (!is.null(patient_order)) {
+    # Validate the patient order
+    invalid_patients <- setdiff(patient_order, unique_patients)
+    if (length(invalid_patients) > 0) {
+      warning(paste0("The following patients in patient_order were not found in the data: ", 
+                     paste(invalid_patients, collapse = ", ")))
     }
     
-    missing_samples <- setdiff(unique_samples, sample_order)
-    if (length(missing_samples) > 0) {
-      warning(paste0("The following samples in the data were not specified in sample_order and will be placed at the bottom: ", 
-                     paste(missing_samples, collapse = ", ")))
-      # Add unspecified samples at the end of the order
-      sample_order <- c(sample_order, missing_samples)
+    missing_patients <- setdiff(unique_patients, patient_order)
+    if (length(missing_patients) > 0) {
+      warning(paste0("The following patients in the data were not specified in patient_order and will be placed at the bottom: ", 
+                     paste(missing_patients, collapse = ", ")))
+      # Add unspecified patients at the end of the order
+      patient_order <- c(patient_order, missing_patients)
     }
-    
-    # Order will be from top to bottom, so we reverse it for the factor
-    gene_maf$Tumor_Sample_Barcode <- factor(gene_maf$Tumor_Sample_Barcode, 
-                                           levels = rev(sample_order))
   } else {
-    # Default ordering by mutation count if no sample_order provided
-    message("No custom sample order provided. Ordering samples by mutation count.")
-    sample_counts <- table(gene_maf$Tumor_Sample_Barcode)
-    sample_order <- names(sort(sample_counts, decreasing = TRUE))
-    gene_maf$Tumor_Sample_Barcode <- factor(gene_maf$Tumor_Sample_Barcode, 
-                                           levels = rev(sample_order))
+    # Default ordering by mutation count per patient if no patient_order provided
+    message("No custom patient order provided. Ordering patients by mutation count.")
+    patient_counts <- table(gene_maf$PatientID)
+    patient_order <- names(sort(patient_counts, decreasing = TRUE))
   }
+  
+  # Handle sample ordering within each patient
+  if (!is.null(sample_order)) {
+    # For samples that are specified in sample_order, use that order
+    # For samples not specified, order them by mutation count within each patient
+    ordered_samples <- c()
+    
+    for (patient in patient_order) {
+      patient_samples <- patient_sample_map$Tumor_Sample_Barcode[patient_sample_map$PatientID == patient]
+      
+      # Get samples for this patient that are in sample_order
+      ordered_patient_samples <- intersect(sample_order, patient_samples)
+      
+      # Get samples for this patient that are NOT in sample_order
+      unordered_patient_samples <- setdiff(patient_samples, sample_order)
+      
+      # For unordered samples, sort by mutation count
+      if (length(unordered_patient_samples) > 0) {
+        sample_counts <- table(gene_maf$Tumor_Sample_Barcode[gene_maf$PatientID == patient & 
+                                                           gene_maf$Tumor_Sample_Barcode %in% unordered_patient_samples])
+        unordered_patient_samples <- names(sort(sample_counts, decreasing = TRUE))
+      }
+      
+      # Combine ordered and unordered samples for this patient
+      ordered_samples <- c(ordered_samples, ordered_patient_samples, unordered_patient_samples)
+    }
+  } else {
+    # Default ordering by mutation count within each patient
+    message("No custom sample order provided. Ordering samples by mutation count within each patient.")
+    ordered_samples <- c()
+    
+    for (patient in patient_order) {
+      patient_samples <- patient_sample_map$Tumor_Sample_Barcode[patient_sample_map$PatientID == patient]
+      patient_maf <- gene_maf[gene_maf$PatientID == patient, ]
+      
+      if (nrow(patient_maf) > 0) {
+        sample_counts <- table(patient_maf$Tumor_Sample_Barcode)
+        ordered_patient_samples <- names(sort(sample_counts, decreasing = TRUE))
+        ordered_samples <- c(ordered_samples, ordered_patient_samples)
+      }
+    }
+  }
+  
+  # Set factor levels for samples (reverse for plotting from top to bottom)
+  gene_maf$Tumor_Sample_Barcode <- factor(gene_maf$Tumor_Sample_Barcode, 
+                                         levels = rev(ordered_samples))
+  
+  # Set factor levels for patients (reverse for plotting from top to bottom)
+  gene_maf$PatientID <- factor(gene_maf$PatientID, levels = rev(patient_order))
   
   # Make Hugo_Symbol a factor with specified order
   gene_maf$Hugo_Symbol <- factor(gene_maf$Hugo_Symbol, levels = genes)
   
-  # Create the faceted plot
+  # Create the faceted plot with patient grouping
   p <- ggplot2::ggplot(gene_maf, 
                       ggplot2::aes(x = aa_pos, 
                                    y = Tumor_Sample_Barcode, 
                                    color = Variant_Classification,
                                    shape = variant_type)) +
+    # Add regular points
     ggplot2::geom_point(size = point_size, alpha = 0.8) +
+    # Add PolyPhen-based borders - separate for SNVs (circles) and INDELs (triangles)
+    ggplot2::geom_point(data = gene_maf[gene_maf$variant_type == "SNV", ],
+                       ggplot2::aes(x = aa_pos, y = Tumor_Sample_Barcode),
+                       size = point_size,
+                       shape = 21,  # Hollow circle
+                       color = gene_maf$polyphen_border[gene_maf$variant_type == "SNV"],
+                       fill = NA,
+                       stroke = 1,
+                       alpha = 1,
+                       show.legend = FALSE,
+                       inherit.aes = FALSE) +
+    ggplot2::geom_point(data = gene_maf[gene_maf$variant_type == "INDEL", ],
+                       ggplot2::aes(x = aa_pos, y = Tumor_Sample_Barcode),
+                       size = point_size,
+                       shape = 24,  # Hollow triangle
+                       color = gene_maf$polyphen_border[gene_maf$variant_type == "INDEL"],
+                       fill = NA,
+                       stroke = 1,
+                       alpha = 1,
+                       show.legend = FALSE,
+                       inherit.aes = FALSE) +
+    # Add pathogenic variants with thick black border - circles for SNV, triangles for INDEL
+    ggplot2::geom_point(data = gene_maf[gene_maf$is_pathogenic & gene_maf$variant_type == "SNV", ],
+                       ggplot2::aes(x = aa_pos, y = Tumor_Sample_Barcode),
+                       size = point_size,
+                       stroke = 3,
+                       color = "black",
+                       fill = NA,
+                       alpha = 1,
+                       shape = 21,  # Hollow circle for SNV
+                       inherit.aes = FALSE) +
+    ggplot2::geom_point(data = gene_maf[gene_maf$is_pathogenic & gene_maf$variant_type == "INDEL", ],
+                       ggplot2::aes(x = aa_pos, y = Tumor_Sample_Barcode),
+                       size = point_size,
+                       stroke = 3,
+                       color = "black",
+                       fill = NA,
+                       alpha = 1,
+                       shape = 24,  # Hollow triangle for INDEL
+                       inherit.aes = FALSE) +
     ggplot2::scale_color_manual(values = variant_colors) +
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
-    ggrepel::geom_text_repel(
+    ggrepel::geom_label_repel(
       ggplot2::aes(label = hgvsp_label),
       size = text_size,
       color = "black",
+      fill = scales::alpha(gene_maf$polyphen_border, 0.5),
+      label.color = NA,  # No outline/border on the rectangle
       box.padding = 0.35,
       point.padding = 0.5,
       segment.color = "grey50",
       max.overlaps = 15
     ) +
-    ggplot2::facet_wrap(~ Hugo_Symbol, scales = "free_x") +
+    ggplot2::facet_grid(PatientID ~ Hugo_Symbol, scales = "free", space = "free_y") +
     ggplot2::labs(
       title = title,
       x = "Amino Acid Position", 
@@ -454,8 +579,53 @@ visualize_maf_aa_facet <- function(maf_input,
       legend.box = "vertical",
       axis.text.y = ggplot2::element_text(size = 8),
       strip.background = ggplot2::element_rect(fill = "lightblue"),
-      strip.text = ggplot2::element_text(face = "bold")
+      strip.text = ggplot2::element_text(face = "bold"),
+      strip.text.y = ggplot2::element_text(angle = 0)  # Keep patient labels horizontal
     )
+  
+  # Add manual legends using annotation instead of dummy geoms
+  legend_guides <- list()
+  
+  # Add pathogenic legend if there are pathogenic variants
+  if (any(gene_maf$is_pathogenic)) {
+    legend_guides[["Clinical Significance"]] <- ggplot2::guide_legend(
+      title = "Clinical Significance",
+      override.aes = list(
+        size = point_size + 1,
+        stroke = 3,
+        color = "black",
+        fill = NA,
+        shape = 21,
+        alpha = 1
+      ),
+      order = 3
+    )
+    
+    # Add a dummy aesthetic for pathogenic variants
+    p <- p + 
+      ggplot2::aes(linetype = ifelse(is_pathogenic, "Pathogenic", "Non-pathogenic")) +
+      ggplot2::scale_linetype_manual(
+        values = c("Pathogenic" = "solid", "Non-pathogenic" = "solid"),
+        name = "Clinical Significance",
+        guide = legend_guides[["Clinical Significance"]]
+      )
+  }
+  
+  # Create a simpler approach for the legends by using the guides() function
+  p <- p + ggplot2::guides(
+    color = ggplot2::guide_legend(title = "Variant Classification", order = 1),
+    shape = ggplot2::guide_legend(title = "Variant Type", order = 2)
+  )
+  
+  # Add text annotation for PolyPhen legend if there are PolyPhen scores
+  if (any(!is.na(gene_maf$polyphen_score))) {
+    # Add a text annotation explaining the border colors
+    p <- p + 
+      ggplot2::labs(caption = "Border colors: Red = PolyPhen > 0.85 (damaging), Green = PolyPhen ≤ 0.85 (benign), Black = No PolyPhen score\nThick black border = Pathogenic variant")
+  } else if (any(gene_maf$is_pathogenic)) {
+    p <- p + 
+      ggplot2::labs(caption = "Thick black border = Pathogenic variant")
+  }
   
   # Save the plot if an output directory is specified
   if (!is.null(output_dir)) {
@@ -493,7 +663,6 @@ visualize_maf_aa_facet <- function(maf_input,
   # Return the plot object invisibly
   invisible(p)
 }
-
 # Example usage:
 # library(maftools)
 # 
