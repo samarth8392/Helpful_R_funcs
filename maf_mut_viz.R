@@ -557,6 +557,7 @@ visualize_maf_aa_facet <- function(maf_input,
     ggplot2::scale_color_manual(values = variant_colors) +
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
     ggrepel::geom_label_repel(
+      data = gene_maf[gene_maf$variant_type == "SNV", ],
       ggplot2::aes(label = hgvsp_label),
       size = text_size,
       color = "black",
