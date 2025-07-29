@@ -557,16 +557,17 @@ visualize_maf_aa_facet <- function(maf_input,
     ggplot2::scale_color_manual(values = variant_colors) +
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
     ggrepel::geom_label_repel(
-      data = gene_maf[gene_maf$variant_type == "SNV", ],
-      ggplot2::aes(label = hgvsp_label),
+      data = gene_maf[gene_maf$variant_type == "SNV", ],  # Only label SNVs
+      ggplot2::aes(label = hgvsp_label, 
+                   fill = scales::alpha(polyphen_border, 0.5)),  # Move fill inside aes()
       size = text_size,
       color = "black",
-      fill = scales::alpha(gene_maf$polyphen_border, 0.5),
       label.color = NA,  # No outline/border on the rectangle
       box.padding = 0.35,
       point.padding = 0.5,
       segment.color = "grey50",
-      max.overlaps = 15
+      max.overlaps = 15,
+      inherit.aes = FALSE  # Important: don't inherit aesthetics from main ggplot
     ) +
     ggplot2::facet_grid(PatientID ~ Hugo_Symbol, scales = "free", space = "free_y") +
     ggplot2::labs(
