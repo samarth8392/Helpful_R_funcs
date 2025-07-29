@@ -304,7 +304,7 @@ visualize_maf_aa_facet <- function(maf_input,
   }
   
   # Check if required columns exist
-  required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", "HGVSp_Short", "PatientID")
+  required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", "HGVSp_Short", "PatientID", "Protein_position")
   missing_cols <- required_cols[!required_cols %in% colnames(maf_data)]
   if (length(missing_cols) > 0) {
     stop(paste0("MAF data is missing required columns: ", 
@@ -384,6 +384,50 @@ visualize_maf_aa_facet <- function(maf_input,
   # For splice sites or other variants without amino acid positions, 
   # set position to -1 (will be handled specially in the plot)
   gene_maf$aa_pos[is.na(gene_maf$aa_pos)] <- -1
+  
+  # Extract protein length from Protein_position column for each gene
+  protein_lengths <- list()
+  for (gene in genes) {
+    gene_data <- gene_maf[gene_maf$Hugo_Symbol == gene, ]
+    if (nrow(gene_data) > 0) {
+      # Extract protein length from Protein_position column (format: "position/total_length")
+      protein_pos_strings <- gene_data$Protein_position[!is.na(gene_data$Protein_position)]
+      if (length(protein_pos_strings) > 0) {
+        # Extract the denominator (total protein length) from strings like "1002/1392"
+        protein_lengths_for_gene <- sapply(protein_pos_strings, function(x) {
+          parts <- strsplit(as.character(x), "/")[[1]]
+          if (length(parts) == 2) {
+            return(as.numeric(parts[2]))
+          } else {
+            return(NA)
+          }
+        })
+        # Take the maximum length (should be consistent for the same gene)
+        max_length <- max(protein_lengths_for_gene, na.rm = TRUE)
+        if (!is.na(max_length) && is.finite(max_length)) {
+          protein_lengths[[gene]] <- max_length
+        }
+      }
+    }
+  }
+  
+  # If we couldn't extract protein lengths, fall back to maximum observed mutation position + 10%
+  for (gene in genes) {
+    if (is.null(protein_lengths[[gene]])) {
+      gene_data <- gene_maf[gene_maf$Hugo_Symbol == gene, ]
+      max_pos <- max(gene_data$aa_pos[gene_data$aa_pos > 0], na.rm = TRUE)
+      if (is.finite(max_pos)) {
+        protein_lengths[[gene]] <- ceiling(max_pos * 1.1)
+        warning(paste0("Could not extract protein length for ", gene, 
+                      ". Using maximum observed mutation position + 10% (", 
+                      protein_lengths[[gene]], ")"))
+      } else {
+        protein_lengths[[gene]] <- 1000  # Default fallback
+        warning(paste0("Could not determine protein length for ", gene, 
+                      ". Using default length of 1000"))
+      }
+    }
+  }
   
   # Add a shortened version of HGVSp_Short for labeling (without the 'p.' prefix)
   gene_maf$hgvsp_label <- gsub("^p\\.", "", gene_maf$HGVSp_Short)
@@ -506,26 +550,9 @@ visualize_maf_aa_facet <- function(maf_input,
   # Make Hugo_Symbol a factor with specified order
   gene_maf$Hugo_Symbol <- factor(gene_maf$Hugo_Symbol, levels = genes)
   
-  # Create a PolyPhen category column for proper mapping
-  gene_maf$polyphen_category <- ifelse(is.na(gene_maf$polyphen_score), "No Score",
-                                   ifelse(gene_maf$polyphen_score > 0.85, "Damaging", "Benign"))
-
-  max_aa_positions <- gene_maf %>%
-    dplyr::filter(aa_pos > 0) %>%  # Exclude special variants with aa_pos = -1
-    dplyr::group_by(Hugo_Symbol) %>%
-    dplyr::summarise(max_aa_pos = max(aa_pos, na.rm = TRUE), .groups = "drop")
-
-  # For genes with no valid positions, set a default max
-  max_aa_positions$max_aa_pos[is.infinite(max_aa_positions$max_aa_pos)] <- 100
-
-  # Create a small buffer for special variants at position -1
-  gene_maf$aa_pos_display <- ifelse(gene_maf$aa_pos == -1, 
-                                 max_aa_positions$max_aa_pos[match(gene_maf$Hugo_Symbol, max_aa_positions$Hugo_Symbol)] + 50,
-                                 gene_maf$aa_pos)
-  
   # Create the faceted plot with patient grouping
   p <- ggplot2::ggplot(gene_maf, 
-                      ggplot2::aes(x = aa_pos_display, 
+                      ggplot2::aes(x = aa_pos, 
                                    y = Tumor_Sample_Barcode, 
                                    color = Variant_Classification,
                                    shape = variant_type)) +
@@ -574,36 +601,24 @@ visualize_maf_aa_facet <- function(maf_input,
     ggplot2::scale_color_manual(values = variant_colors) +
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
     ggrepel::geom_label_repel(
-      data = gene_maf[gene_maf$variant_type == "SNV", ],
-      ggplot2::aes(x = aa_pos,
-                   y = Tumor_Sample_Barcode,
-                   label = hgvsp_label,
-                   fill = polyphen_category),          # Map to category
+      ggplot2::aes(label = hgvsp_label),
       size = text_size,
       color = "black",
-      label.color = NA,
+      fill = scales::alpha(gene_maf$polyphen_border, 0.5),
+      label.color = NA,  # No outline/border on the rectangle
       box.padding = 0.35,
       point.padding = 0.5,
       segment.color = "grey50",
-      max.overlaps = 15,
-      inherit.aes = FALSE
+      max.overlaps = 15
     ) +
-    ggplot2::scale_x_continuous(
-      limits = c(0, NA),  # Start from 0, let ggplot determine the upper limit based on data
-      expand = ggplot2::expansion(mult = c(0.01, 0.05)),  # Small padding on both sides
-      breaks = scales::pretty_breaks(n = 6)  # Nice break points
-    ) +
-    ggplot2::scale_fill_manual(
-      values = c("No Score" = "white", "Damaging" = "lightcoral", "Benign" = "lightgreen"),
-      name = "PolyPhen",
-      guide = "none"  # Hide this legend if you don't want it
-    ) +
-    ggplot2::facet_grid(PatientID ~ Hugo_Symbol, scales = "free", space = "free_y") +
+    ggplot2::facet_grid(PatientID ~ Hugo_Symbol, scales = "free", space = "free_y",
+                       switch = "y") +
     ggplot2::labs(
       title = title,
       x = "Amino Acid Position", 
       y = "Sample"
     ) +
+    ggplot2::scale_y_discrete(position = "right") +  # Move sample names to right side
     ggplot2::theme_bw() +
     ggplot2::theme(
       legend.position = "bottom",
@@ -613,6 +628,24 @@ visualize_maf_aa_facet <- function(maf_input,
       strip.text = ggplot2::element_text(face = "bold"),
       strip.text.y = ggplot2::element_text(angle = 0)  # Keep patient labels horizontal
     )
+  
+  # Set x-axis limits for each gene facet based on protein length
+  # Since we can't set different x-limits for each facet directly in ggplot2,
+  # we need to handle this differently
+  
+  # For now, set the x-axis to span from 0 to the maximum protein length across all genes
+  max_protein_length <- max(unlist(protein_lengths), na.rm = TRUE)
+  
+  # If there are variants at position -1 (splice sites, etc.), we need to handle them
+  if (any(gene_maf$aa_pos == -1)) {
+    # Place splice sites and other non-positioned variants at position 0
+    gene_maf$aa_pos[gene_maf$aa_pos == -1] <- 0
+    p <- p + ggplot2::scale_x_continuous(limits = c(-50, max_protein_length + 50),
+                                        breaks = scales::pretty_breaks(n = 6))
+  } else {
+    p <- p + ggplot2::scale_x_continuous(limits = c(0, max_protein_length),
+                                        breaks = scales::pretty_breaks(n = 6))
+  }
   
   # Add manual legends using annotation instead of dummy geoms
   legend_guides <- list()
@@ -658,6 +691,12 @@ visualize_maf_aa_facet <- function(maf_input,
       ggplot2::labs(caption = "Thick black border = Pathogenic variant")
   }
   
+  # Print protein length information
+  message("Protein lengths extracted:")
+  for (gene in names(protein_lengths)) {
+    message(paste0("  ", gene, ": ", protein_lengths[[gene]], " amino acids"))
+  }
+  
   # Save the plot if an output directory is specified
   if (!is.null(output_dir)) {
     # Validate file type
@@ -694,7 +733,6 @@ visualize_maf_aa_facet <- function(maf_input,
   # Return the plot object invisibly
   invisible(p)
 }
-
 visualize_vaf_barplot <- function(maf_input, 
                                    genes, 
                                    sample_order = NULL,
