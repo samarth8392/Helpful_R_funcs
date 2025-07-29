@@ -558,8 +558,10 @@ visualize_maf_aa_facet <- function(maf_input,
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
     ggrepel::geom_label_repel(
       data = gene_maf[gene_maf$variant_type == "SNV", ],  # Only label SNVs
-      ggplot2::aes(label = hgvsp_label, 
-                   fill = scales::alpha(polyphen_border, 0.5)),  # Move fill inside aes()
+      ggplot2::aes(x = aa_pos, 
+                   y = Tumor_Sample_Barcode,
+                   label = hgvsp_label, 
+                   fill = scales::alpha(polyphen_border, 0.5)),  # Include x, y aesthetics
       size = text_size,
       color = "black",
       label.color = NA,  # No outline/border on the rectangle
