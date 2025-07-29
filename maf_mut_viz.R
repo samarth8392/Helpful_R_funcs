@@ -509,10 +509,23 @@ visualize_maf_aa_facet <- function(maf_input,
   # Create a PolyPhen category column for proper mapping
   gene_maf$polyphen_category <- ifelse(is.na(gene_maf$polyphen_score), "No Score",
                                    ifelse(gene_maf$polyphen_score > 0.85, "Damaging", "Benign"))
+
+  max_aa_positions <- gene_maf %>%
+    dplyr::filter(aa_pos > 0) %>%  # Exclude special variants with aa_pos = -1
+    dplyr::group_by(Hugo_Symbol) %>%
+    dplyr::summarise(max_aa_pos = max(aa_pos, na.rm = TRUE), .groups = "drop")
+
+  # For genes with no valid positions, set a default max
+  max_aa_positions$max_aa_pos[is.infinite(max_aa_positions$max_aa_pos)] <- 100
+
+  # Create a small buffer for special variants at position -1
+  gene_maf$aa_pos_display <- ifelse(gene_maf$aa_pos == -1, 
+                                 max_aa_positions$max_aa_pos[match(gene_maf$Hugo_Symbol, max_aa_positions$Hugo_Symbol)] + 50,
+                                 gene_maf$aa_pos)
   
   # Create the faceted plot with patient grouping
   p <- ggplot2::ggplot(gene_maf, 
-                      ggplot2::aes(x = aa_pos, 
+                      ggplot2::aes(x = aa_pos_display, 
                                    y = Tumor_Sample_Barcode, 
                                    color = Variant_Classification,
                                    shape = variant_type)) +
@@ -574,6 +587,11 @@ visualize_maf_aa_facet <- function(maf_input,
       segment.color = "grey50",
       max.overlaps = 15,
       inherit.aes = FALSE
+    ) +
+    ggplot2::scale_x_continuous(
+      limits = c(0, NA),  # Start from 0, let ggplot determine the upper limit based on data
+      expand = ggplot2::expansion(mult = c(0.01, 0.05)),  # Small padding on both sides
+      breaks = scales::pretty_breaks(n = 6)  # Nice break points
     ) +
     ggplot2::scale_fill_manual(
       values = c("No Score" = "white", "Damaging" = "lightcoral", "Benign" = "lightgreen"),
