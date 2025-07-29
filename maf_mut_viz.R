@@ -676,6 +676,256 @@ visualize_maf_aa_facet <- function(maf_input,
   # Return the plot object invisibly
   invisible(p)
 }
+
+visualize_vaf_barplot <- function(maf_input, 
+                                   genes, 
+                                   sample_order = NULL,
+                                   patient_order = NULL,
+                                   title = "",
+                                   file_name = "vaf_barplot",
+                                   output_dir = NULL,
+                                   file_type = "pdf",
+                                   height = 10,
+                                   width = 12,
+                                   dpi = 300) {
+  
+  # Check required packages
+  required_packages <- c("ggplot2", "data.table", "dplyr", "stringr")
+  for(pkg in required_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop(paste0("Package '", pkg, "' is required but not installed. ",
+                  "Please install it with: install.packages('", pkg, "')"))
+    }
+  }
+  
+  # Access the MAF data
+  message("Reading MAF data...")
+  if (inherits(maf_input, "MAF")) {
+    # If input is a MAF object from maftools
+    maf_data <- maf_input@data
+  } else if (is.data.frame(maf_input)) {
+    # If input is already a data frame
+    maf_data <- maf_input
+  } else {
+    stop("Input must be either a MAF object from maftools or a data frame in MAF format")
+  }
+  
+  # Check if required columns exist
+  required_cols <- c("Hugo_Symbol", "Tumor_Sample_Barcode", "Variant_Classification", 
+                     "t_alt_count", "t_ref_count", "PatientID")
+  missing_cols <- required_cols[!required_cols %in% colnames(maf_data)]
+  if (length(missing_cols) > 0) {
+    stop(paste0("MAF data is missing required columns: ", 
+                paste(missing_cols, collapse = ", ")))
+  }
+  
+  # Create output directory if needed
+  if (!is.null(output_dir)) {
+    if (!dir.exists(output_dir)) {
+      dir.create(output_dir, recursive = TRUE)
+    }
+  }
+  
+  # Filter MAF for the specified genes
+  gene_maf <- maf_data[maf_data$Hugo_Symbol %in% genes, ]
+  
+  if (nrow(gene_maf) == 0) {
+    stop("No mutations found for any of the specified genes")
+  }
+  
+  # Calculate VAF
+  gene_maf$VAF <- as.numeric(as.character(gene_maf$t_alt_count)) / 
+                  (as.numeric(as.character(gene_maf$t_ref_count)) + 
+                   as.numeric(as.character(gene_maf$t_alt_count)))
+  
+  # Remove rows with invalid VAF calculations (NA, Inf, etc.)
+  gene_maf <- gene_maf[!is.na(gene_maf$VAF) & is.finite(gene_maf$VAF), ]
+  
+  if (nrow(gene_maf) == 0) {
+    stop("No valid VAF calculations possible with the available data")
+  }
+  
+  # Setup custom variant classification colors
+  variant_colors <- c(
+    "Missense_Mutation" = "#FF5733",     # Orange-red
+    "Nonsense_Mutation" = "#3498DB",     # Blue
+    "Silent" = "#95A5A6",                # Gray
+    "Frame_Shift_Del" = "#9B59B6",       # Purple
+    "Frame_Shift_Ins" = "#F1C40F",       # Yellow
+    "In_Frame_Del" = "#E74C3C",          # Red
+    "In_Frame_Ins" = "#2ECC71",          # Green
+    "Splice_Site" = "#34495E",           # Dark blue
+    "Translation_Start_Site" = "#D4AC0D", # Gold
+    "Nonstop_Mutation" = "#A04000"       # Brown
+  )
+  
+  # For any variant type not in our predefined colors, add a default color
+  unique_variants <- unique(gene_maf$Variant_Classification)
+  missing_variants <- setdiff(unique_variants, names(variant_colors))
+  if (length(missing_variants) > 0) {
+    # Generate some additional colors for any missing variant types
+    additional_colors <- rainbow(length(missing_variants))
+    variant_colors <- c(variant_colors, setNames(additional_colors, missing_variants))
+  }
+  
+  # Order samples and patients
+  unique_patients <- unique(gene_maf$PatientID)
+  unique_samples <- unique(gene_maf$Tumor_Sample_Barcode)
+  
+  # Create patient-sample mapping
+  patient_sample_map <- gene_maf %>%
+    dplyr::select(PatientID, Tumor_Sample_Barcode) %>%
+    dplyr::distinct()
+  
+  # Handle patient ordering
+  if (!is.null(patient_order)) {
+    # Validate the patient order
+    invalid_patients <- setdiff(patient_order, unique_patients)
+    if (length(invalid_patients) > 0) {
+      warning(paste0("The following patients in patient_order were not found in the data: ", 
+                     paste(invalid_patients, collapse = ", ")))
+    }
+    
+    missing_patients <- setdiff(unique_patients, patient_order)
+    if (length(missing_patients) > 0) {
+      warning(paste0("The following patients in the data were not specified in patient_order and will be placed at the bottom: ", 
+                     paste(missing_patients, collapse = ", ")))
+      # Add unspecified patients at the end of the order
+      patient_order <- c(patient_order, missing_patients)
+    }
+  } else {
+    # Default ordering by mutation count per patient if no patient_order provided
+    message("No custom patient order provided. Ordering patients by mutation count.")
+    patient_counts <- table(gene_maf$PatientID)
+    patient_order <- names(sort(patient_counts, decreasing = TRUE))
+  }
+  
+  # Handle sample ordering within each patient
+  if (!is.null(sample_order)) {
+    # For samples that are specified in sample_order, use that order
+    # For samples not specified, order them by mutation count within each patient
+    ordered_samples <- c()
+    
+    for (patient in patient_order) {
+      patient_samples <- patient_sample_map$Tumor_Sample_Barcode[patient_sample_map$PatientID == patient]
+      
+      # Get samples for this patient that are in sample_order
+      ordered_patient_samples <- intersect(sample_order, patient_samples)
+      
+      # Get samples for this patient that are NOT in sample_order
+      unordered_patient_samples <- setdiff(patient_samples, sample_order)
+      
+      # For unordered samples, sort by mutation count
+      if (length(unordered_patient_samples) > 0) {
+        sample_counts <- table(gene_maf$Tumor_Sample_Barcode[gene_maf$PatientID == patient & 
+                                                           gene_maf$Tumor_Sample_Barcode %in% unordered_patient_samples])
+        unordered_patient_samples <- names(sort(sample_counts, decreasing = TRUE))
+      }
+      
+      # Combine ordered and unordered samples for this patient
+      ordered_samples <- c(ordered_samples, ordered_patient_samples, unordered_patient_samples)
+    }
+  } else {
+    # Default ordering by mutation count within each patient
+    message("No custom sample order provided. Ordering samples by mutation count within each patient.")
+    ordered_samples <- c()
+    
+    for (patient in patient_order) {
+      patient_samples <- patient_sample_map$Tumor_Sample_Barcode[patient_sample_map$PatientID == patient]
+      patient_maf <- gene_maf[gene_maf$PatientID == patient, ]
+      
+      if (nrow(patient_maf) > 0) {
+        sample_counts <- table(patient_maf$Tumor_Sample_Barcode)
+        ordered_patient_samples <- names(sort(sample_counts, decreasing = TRUE))
+        ordered_samples <- c(ordered_samples, ordered_patient_samples)
+      }
+    }
+  }
+  
+  # Set factor levels for ordering
+  gene_maf$Tumor_Sample_Barcode <- factor(gene_maf$Tumor_Sample_Barcode, 
+                                         levels = ordered_samples)
+  gene_maf$PatientID <- factor(gene_maf$PatientID, levels = patient_order)
+  gene_maf$Hugo_Symbol <- factor(gene_maf$Hugo_Symbol, levels = genes)
+  
+  # Create the barplot
+  p <- ggplot2::ggplot(gene_maf, 
+                      ggplot2::aes(x = Tumor_Sample_Barcode, 
+                                   y = VAF, 
+                                   fill = Variant_Classification)) +
+    ggplot2::geom_col(position = "dodge", alpha = 0.8) +
+    ggplot2::scale_fill_manual(values = variant_colors) +
+    ggplot2::facet_grid(PatientID ~ Hugo_Symbol, scales = "free_x", space = "free_x") +
+    ggplot2::labs(
+      title = title,
+      x = "Sample", 
+      y = "Variant Allele Frequency (VAF)",
+      fill = "Variant Classification"
+    ) +
+    ggplot2::theme_bw() +
+    ggplot2::theme(
+      legend.position = "bottom",
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
+      axis.text.y = ggplot2::element_text(size = 8),
+      strip.background = ggplot2::element_rect(fill = "lightblue"),
+      strip.text = ggplot2::element_text(face = "bold"),
+      strip.text.y = ggplot2::element_text(angle = 0),
+      panel.grid.minor = ggplot2::element_blank()
+    ) +
+    ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1))
+  
+  # Save the plot if an output directory is specified
+  if (!is.null(output_dir)) {
+    # Validate file type
+    file_type <- tolower(file_type)
+    if (!file_type %in% c("pdf", "png")) {
+      warning("Invalid file_type. Must be 'pdf' or 'png'. Defaulting to 'pdf'.")
+      file_type <- "pdf"
+    }
+    
+    # Set file extension based on file type
+    file_extension <- ifelse(file_type == "pdf", "pdf", "png")
+    file_name <- file.path(output_dir, paste0(file_name,".",file_extension))
+    message(paste0("Saving plot to: ", file_name))
+    
+    # Save as specified file type
+    if (file_type == "pdf") {
+      ggplot2::ggsave(
+        file_name,
+        plot = p,
+        width = width,
+        height = height
+      )
+    } else {
+      ggplot2::ggsave(
+        file_name,
+        plot = p,
+        width = width,
+        height = height,
+        dpi = dpi
+      )
+    }
+  }
+  
+  # Print summary statistics
+  message("\nVAF Summary Statistics:")
+  vaf_summary <- gene_maf %>%
+    dplyr::group_by(Hugo_Symbol, Variant_Classification) %>%
+    dplyr::summarise(
+      n_mutations = dplyr::n(),
+      mean_VAF = mean(VAF, na.rm = TRUE),
+      median_VAF = median(VAF, na.rm = TRUE),
+      min_VAF = min(VAF, na.rm = TRUE),
+      max_VAF = max(VAF, na.rm = TRUE),
+      .groups = "drop"
+    )
+  
+  print(vaf_summary)
+  
+  # Return the plot object invisibly
+  invisible(p)
+}
+
 # Example usage:
 # library(maftools)
 # 
