@@ -582,16 +582,22 @@ visualize_maf_aa_facet <- function(maf_input,
       data = gene_maf[gene_maf$variant_type == "SNV", ],
       ggplot2::aes(x = aa_pos_display,
                    y = Tumor_Sample_Barcode,
-                   label = hgvsp_label),
+                   label = hgvsp_label,
+                   fill = polyphen_category),          # Map to PolyPhen category
       size = text_size,
       color = "black",
-      fill = "white",
       label.color = NA,
       box.padding = 0.35,
       point.padding = 0.5,
       segment.color = "grey50",
       max.overlaps = 15,
       inherit.aes = FALSE
+    ) +
+    # Add the scale for the fill colors
+    ggplot2::scale_fill_manual(
+      values = c("No Score" = "white", "Damaging" = "lightcoral", "Benign" = "lightgreen"),
+      name = "PolyPhen",
+      guide = "none"  # Hide this legend if you don't want it
     ) +
     ggplot2::scale_x_continuous(
       limits = c(0, NA),  # Start from 0, let ggplot determine the upper limit based on data
@@ -668,6 +674,8 @@ visualize_maf_aa_facet <- function(maf_input,
   # Return the plot object invisibly
   invisible(p)
 }
+
+
 visualize_vaf_barplot <- function(maf_input, 
                                    genes, 
                                    sample_order = NULL,
