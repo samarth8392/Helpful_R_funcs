@@ -556,20 +556,27 @@ visualize_maf_aa_facet <- function(maf_input,
                        inherit.aes = FALSE) +
     ggplot2::scale_color_manual(values = variant_colors) +
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
+    gene_maf$polyphen_category <- ifelse(is.na(gene_maf$polyphen_score), "No Score",
+                                   ifelse(gene_maf$polyphen_score > 0.85, "Damaging", "Benign"))
     ggrepel::geom_label_repel(
-      data = gene_maf[gene_maf$variant_type == "SNV", ],  # Only label SNVs
-      ggplot2::aes(x = aa_pos,                           # Add x aesthetic
-                   y = Tumor_Sample_Barcode,             # Add y aesthetic
-                   label = hgvsp_label, 
-                   fill = scales::alpha(polyphen_border, 0.5)),
+      data = gene_maf[gene_maf$variant_type == "SNV", ],
+      ggplot2::aes(x = aa_pos,
+                   y = Tumor_Sample_Barcode,
+                   label = hgvsp_label,
+                   fill = polyphen_category),          # Map to category
       size = text_size,
       color = "black",
-      label.color = NA,  # No outline/border on the rectangle
+      label.color = NA,
       box.padding = 0.35,
       point.padding = 0.5,
       segment.color = "grey50",
       max.overlaps = 15,
-      inherit.aes = FALSE  # Important: don't inherit aesthetics from main ggplot
+      inherit.aes = FALSE
+    ) +
+    ggplot2::scale_fill_manual(
+      values = c("No Score" = "white", "Damaging" = "lightcoral", "Benign" = "lightgreen"),
+      name = "PolyPhen",
+      guide = "none"  # Hide this legend if you don't want it
     ) +
     ggplot2::facet_grid(PatientID ~ Hugo_Symbol, scales = "free", space = "free_y") +
     ggplot2::labs(
