@@ -506,6 +506,10 @@ visualize_maf_aa_facet <- function(maf_input,
   # Make Hugo_Symbol a factor with specified order
   gene_maf$Hugo_Symbol <- factor(gene_maf$Hugo_Symbol, levels = genes)
   
+  # Create a PolyPhen category column for proper mapping
+  gene_maf$polyphen_category <- ifelse(is.na(gene_maf$polyphen_score), "No Score",
+                                   ifelse(gene_maf$polyphen_score > 0.85, "Damaging", "Benign"))
+  
   # Create the faceted plot with patient grouping
   p <- ggplot2::ggplot(gene_maf, 
                       ggplot2::aes(x = aa_pos, 
@@ -556,8 +560,6 @@ visualize_maf_aa_facet <- function(maf_input,
                        inherit.aes = FALSE) +
     ggplot2::scale_color_manual(values = variant_colors) +
     ggplot2::scale_shape_manual(values = c("SNV" = 16, "INDEL" = 17)) + # Circle for SNV, triangle for INDEL
-    gene_maf$polyphen_category <- ifelse(is.na(gene_maf$polyphen_score), "No Score",
-                                   ifelse(gene_maf$polyphen_score > 0.85, "Damaging", "Benign"))
     ggrepel::geom_label_repel(
       data = gene_maf[gene_maf$variant_type == "SNV", ],
       ggplot2::aes(x = aa_pos,
