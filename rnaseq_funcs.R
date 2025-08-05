@@ -216,35 +216,6 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
 }
 
 # =============================================================================
-# EXAMPLE USAGE
-# =============================================================================
-
-# Basic usage with your DESeq2 results
-volcano_plot <- create_enhanced_volcano_deseq2(
-  deseq_results = res_gly1_HFCFD_shrunk,  # Your shrunk results
-  comparison_name = "Glyphosate 1.0 vs Control (HFCFD)",
-  padj_threshold = 0.05,
-  lfc_threshold = 1.0,
-  label_top_genes = 15
-)
-
-print(volcano_plot)
-
-# With specific genes to highlight
-genes_of_interest <- c("Adam11", "Dse", "Cd5l", "Orm3", "Ear2")
-
-volcano_plot_highlighted <- create_enhanced_volcano_deseq2(
-  deseq_results = res_gly1_HFCFD_shrunk,
-  highlight_genes = genes_of_interest,
-  comparison_name = "Glyphosate 1.0 vs Control (HFCFD)",
-  padj_threshold = 0.05,
-  lfc_threshold = 0.5,  # Lower threshold for more sensitive detection
-  label_top_genes = 0   # Don't auto-label, only highlight specified genes
-)
-
-print(volcano_plot_highlighted)
-
-# =============================================================================
 # BATCH VOLCANO PLOTS FOR MULTIPLE COMPARISONS
 # =============================================================================
 
