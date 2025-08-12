@@ -175,7 +175,7 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
   }
   
   # Count significant genes
-  sig_counts <- df %>% count(significance)
+  sig_counts <- df %>% dplyr::count(significance)
   up_count <- sig_counts$n[sig_counts$significance == "Upregulated"] %||% 0
   down_count <- sig_counts$n[sig_counts$significance == "Downregulated"] %||% 0
   
