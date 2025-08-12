@@ -248,7 +248,7 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
     theme(
       plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
       plot.subtitle = element_text(hjust = 0.5, size = 11),
-      plot.caption = element_text(hjust = 0.5, size = 9, style = "italic"),
+      plot.caption = element_text(hjust = 0.5, size = 9, face = "italic"),
       legend.position = legendPosition,
       legend.title = element_text(size = legendLabSize, face = "bold"),
       panel.grid.major = if(gridlines.major) element_line(color = "grey90", size = 0.3) else element_blank(),
