@@ -55,164 +55,257 @@ count_zeros <- function(x) {
 # Enhanced Volcano Plot Function for DESeq2 Results
 # Adapted from methylation analysis volcano plot
 
+# Enhanced create_enhanced_volcano_deseq2 function with EnhancedVolcano options
 create_enhanced_volcano_deseq2 <- function(deseq_results, 
-                                          highlight_genes = NULL,
-                                          comparison_name = "DESeq2 Analysis",
-                                          padj_threshold = 0.05,
-                                          lfc_threshold = 1.0,
-                                          label_top_genes = 10,
-                                          point_size = 1.5,
-                                          highlight_size = 3) {
+                                           highlight_genes = NULL,
+                                           comparison_name = "Comparison",
+                                           # EnhancedVolcano-style parameters
+                                           lab = NULL,
+                                           x = 'log2FoldChange',
+                                           y = 'padj',
+                                           title = NULL,
+                                           subtitle = NULL,
+                                           caption = NULL,
+                                           FCcutoff = 0.5,
+                                           pCutoff = 0.05,
+                                           xlim = NULL,
+                                           ylim = NULL,
+                                           # Color options
+                                           col = c('grey30', 'forestgreen', 'royalblue', 'red2'),
+                                           colAlpha = 0.7,
+                                           # Label options
+                                           label_top_genes = 10,
+                                           labSize = 3.0,
+                                           labCol = 'black',
+                                           labFace = 'plain',
+                                           boxedLabels = FALSE,
+                                           # Point options
+                                           pointSize = 1.2,
+                                           # Grid options
+                                           gridlines.major = TRUE,
+                                           gridlines.minor = FALSE,
+                                           # Legend options
+                                           legendPosition = 'bottom',
+                                           legendLabSize = 11,
+                                           legendIconSize = 3.0,
+                                           # Threshold line options
+                                           hline = NULL,
+                                           vline = NULL,
+                                           drawConnectors = FALSE,
+                                           save_plot = FALSE,
+                                           filename = NULL) {
   
-  # Load required libraries
-  require(ggplot2)
-  require(ggrepel)
-  require(dplyr)
-  require(scales)
+  library(ggplot2)
+  library(ggrepel)
+  library(dplyr)
   
-  # Input validation
-  required_cols <- c("log2FoldChange", "padj", "baseMean")
-  if (!all(required_cols %in% colnames(deseq_results))) {
-    stop("deseq_results must contain columns: ", paste(required_cols, collapse = ", "))
+  # Convert to data frame and handle gene_id column properly
+  if (is.data.frame(deseq_results)) {
+    df <- deseq_results
+    if (!"gene_id" %in% colnames(df)) {
+      df <- df %>% tibble::rownames_to_column("gene_id")
+    }
+  } else {
+    df <- as.data.frame(deseq_results) %>%
+      tibble::rownames_to_column("gene_id")
   }
   
-  # Prepare data
-  plot_data <- deseq_results %>%
-    as.data.frame() %>%
-    tibble::rownames_to_column("gene_id") %>%
-    dplyr::filter(!is.na(padj) & !is.na(log2FoldChange)) %>%
-    dplyr::mutate(
-      # Create significance categories
-      significance = dplyr::case_when(
-        padj < padj_threshold & abs(log2FoldChange) > lfc_threshold ~ "Significant",
-        padj < padj_threshold & abs(log2FoldChange) <= lfc_threshold ~ "P-value only",
-        padj >= padj_threshold & abs(log2FoldChange) > lfc_threshold ~ "Effect size only",
+  # Handle lab parameter
+  if (is.null(lab)) {
+    if ("GeneName" %in% colnames(df)) {
+      df$lab <- ifelse(is.na(df$GeneName) | df$GeneName == "", df$gene_id, df$GeneName)
+    } else {
+      df$lab <- df$gene_id
+    }
+  } else {
+    if (is.character(lab) && length(lab) == 1 && lab %in% colnames(df)) {
+      df$lab <- df[[lab]]
+    } else if (length(lab) == nrow(df)) {
+      df$lab <- lab
+    } else {
+      stop("lab parameter must be a column name in the data or a vector of same length as data")
+    }
+  }
+  
+  # Ensure required columns exist
+  if (!x %in% colnames(df)) stop(paste("Column", x, "not found in data"))
+  if (!y %in% colnames(df)) stop(paste("Column", y, "not found in data"))
+  
+  # Remove rows with NA values in essential columns
+  df <- df %>%
+    filter(!is.na(!!sym(x)) & !is.na(!!sym(y)))
+  
+  # Handle y-axis transformation (padj vs pvalue)
+  if (y == 'padj' || y == 'pvalue') {
+    df$y_transformed <- -log10(df[[y]])
+    y_label <- paste0("-log10(", y, ")")
+    if (is.null(hline)) hline <- -log10(pCutoff)
+  } else {
+    df$y_transformed <- df[[y]]
+    y_label <- y
+  }
+  
+  # Create significance categories using FCcutoff and pCutoff
+  df <- df %>%
+    mutate(
+      significance = case_when(
+        !!sym(y) < pCutoff & !!sym(x) >= FCcutoff ~ "Upregulated",
+        !!sym(y) < pCutoff & !!sym(x) <= -FCcutoff ~ "Downregulated",
+        !!sym(y) < pCutoff & abs(!!sym(x)) < FCcutoff ~ "Significant (small effect)",
         TRUE ~ "Not significant"
-      ),
-      # Direction of regulation
-      direction = dplyr::case_when(
-        log2FoldChange > 0 ~ "Upregulated",
-        log2FoldChange < 0 ~ "Downregulated",
-        TRUE ~ "No change"
-      ),
-      # Transform p-values
-      neg_log10_padj = -log10(padj),
-      # Check if gene should be highlighted
-      is_highlight = if (!is.null(highlight_genes)) {
-        gene_id %in% highlight_genes | 
-        (exists("hugo_symbol", where = .) && hugo_symbol %in% highlight_genes)
-      } else {
-        FALSE
-      },
-      # Create labels for top genes
-      label = case_when(
-        is_highlight ~ if(exists("hugo_symbol", where = .)) hugo_symbol else gene_id,
-        TRUE ~ ""
       )
     )
   
-  # If no highlight genes provided, label top genes by significance
-  if (is.null(highlight_genes) && label_top_genes > 0) {
-    top_genes <- plot_data %>%
-      dplyr::filter(significance == "Significant") %>%
-      dplyr::arrange(padj) %>%
-      dplyr::slice_head(n = label_top_genes)
-    
-    plot_data <- plot_data %>%
-      dplyr::mutate(
-        label = case_when(
-          gene_id %in% top_genes$gene_id ~ if(exists("hugo_symbol", where = .)) hugo_symbol else gene_id,
-          TRUE ~ ""
-        ),
-        is_highlight = gene_id %in% top_genes$gene_id
-      )
-  }
-  
-  # Color scheme
+  # Set up colors (EnhancedVolcano order: NS, FC, P, FC_P)
   colors <- c(
-    "Significant" = "#E31A1C",        # Red
-    "P-value only" = "#FF7F00",       # Orange  
-    "Effect size only" = "#1F78B4",   # Blue
-    "Not significant" = "#CCCCCC"     # Gray
+    "Not significant" = col[1],           # grey30
+    "Significant (small effect)" = col[2], # forestgreen  
+    "Upregulated" = col[4],               # red2
+    "Downregulated" = col[3]              # royalblue
   )
   
-  # Count significant genes
-  sig_counts <- plot_data %>%
-    dplyr::filter(significance == "Significant") %>%
-    dplyr::summarise(
-      total = dplyr::n(),
-      up = sum(log2FoldChange > 0),
-      down = sum(log2FoldChange < 0),
-      .groups = 'drop'
-    )
+  # Get top genes for labeling
+  if (label_top_genes > 0) {
+    top_genes <- df %>%
+      filter(significance %in% c("Upregulated", "Downregulated")) %>%
+      arrange(!!sym(y)) %>%
+      head(label_top_genes)
+  } else {
+    top_genes <- data.frame()
+  }
   
-  # Create the volcano plot
-  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = log2FoldChange, y = neg_log10_padj)) +
-    # Main points
-    ggplot2::geom_point(ggplot2::aes(color = significance, 
-                                    size = is_highlight, 
-                                    alpha = ifelse(is_highlight, 1, 0.7))) +
+  # Count significant genes
+  sig_counts <- df %>% count(significance)
+  up_count <- sig_counts$n[sig_counts$significance == "Upregulated"] %||% 0
+  down_count <- sig_counts$n[sig_counts$significance == "Downregulated"] %||% 0
+  
+  # Set default title if not provided
+  if (is.null(title)) title <- paste("Volcano Plot:", comparison_name)
+  if (is.null(subtitle)) subtitle <- paste0("FC cutoff: ", FCcutoff, ", p-value cutoff: ", pCutoff)
+  
+  # Create the plot
+  p <- ggplot(df, aes(x = !!sym(x), y = y_transformed)) +
+    geom_point(aes(color = significance), alpha = colAlpha, size = pointSize) +
+    scale_color_manual(values = colors) +
     
-    # Highlighted points with special styling
-    {if (any(plot_data$is_highlight)) {
-      ggplot2::geom_point(data = plot_data %>% dplyr::filter(is_highlight), 
-                         ggplot2::aes(x = log2FoldChange, y = neg_log10_padj),
-                         color = "black", size = highlight_size + 1, shape = 21, 
-                         fill = "yellow", stroke = 2, alpha = 1)
+    # Add threshold lines
+    {if (!is.null(hline)) geom_hline(yintercept = hline, linetype = "dashed", color = "black", alpha = 0.7)} +
+    {if (!is.null(vline)) geom_vline(xintercept = vline, linetype = "dashed", color = "black", alpha = 0.7)} +
+    {if (is.null(vline)) geom_vline(xintercept = c(-FCcutoff, FCcutoff), linetype = "dashed", color = "black", alpha = 0.7)} +
+    
+    # Add labels for top genes
+    {if (nrow(top_genes) > 0 && !drawConnectors) {
+      geom_text_repel(
+        data = top_genes,
+        aes(label = lab),
+        size = labSize,
+        color = labCol,
+        fontface = labFace,
+        box.padding = if(boxedLabels) 0.8 else 0.5,
+        point.padding = 0.3,
+        max.overlaps = 20
+      )
     }} +
     
-    # Threshold lines
-    ggplot2::geom_hline(yintercept = -log10(padj_threshold), 
-                       linetype = "dashed", color = "gray50", alpha = 0.8) +
-    ggplot2::geom_vline(xintercept = c(-lfc_threshold, lfc_threshold), 
-                       linetype = "dashed", color = "gray50", alpha = 0.8) +
-    
-    # Gene labels
-    {if (any(plot_data$label != "")) {
-      ggrepel::geom_text_repel(data = plot_data %>% dplyr::filter(label != ""),
-                              ggplot2::aes(label = label),
-                              box.padding = 0.5,
-                              point.padding = 0.5,
-                              segment.color = "black",
-                              segment.size = 0.5,
-                              min.segment.length = 0,
-                              max.overlaps = Inf,
-                              size = 3.5,
-                              fontface = "bold")
+    # Add labels with connectors if requested
+    {if (nrow(top_genes) > 0 && drawConnectors) {
+      geom_text_repel(
+        data = top_genes,
+        aes(label = lab),
+        size = labSize,
+        color = labCol,
+        fontface = labFace,
+        box.padding = if(boxedLabels) 0.8 else 0.5,
+        point.padding = 0.3,
+        max.overlaps = 20,
+        segment.color = 'black',
+        segment.size = 0.3,
+        segment.alpha = 0.6
+      )
     }} +
     
-    # Scales
-    ggplot2::scale_color_manual(values = colors, name = "Significance") +
-    ggplot2::scale_size_manual(values = c("FALSE" = point_size, "TRUE" = highlight_size), 
-                              guide = "none") +
-    ggplot2::scale_alpha_identity() +
-    ggplot2::scale_x_continuous(breaks = scales::pretty_breaks(n = 6)) +
-    ggplot2::scale_y_continuous(breaks = scales::pretty_breaks(n = 6)) +
+    # Gene count annotation
+    annotate("text", x = Inf, y = Inf, 
+             label = paste0("Up: ", up_count, "\nDown: ", down_count),
+             hjust = 1.1, vjust = 1.1, size = 4, fontface = "bold") +
+    
+    # Set axis limits
+    {if (!is.null(xlim)) scale_x_continuous(limits = xlim)} +
+    {if (!is.null(ylim)) scale_y_continuous(limits = ylim)} +
     
     # Labels
-    ggplot2::labs(
-      title = paste("Differential Gene Expression:", comparison_name),
-      subtitle = paste0("Significant DEGs: ", sig_counts$total, 
-                       " (", sig_counts$up, " up, ", sig_counts$down, " down) | ",
-                       "Total genes: ", nrow(plot_data)),
-      x = expression(log[2]("Fold Change")),
-      y = expression(-log[10]("Adjusted P-value")),
-      caption = bquote("Significance thresholds: |log"[2]*"FC| > "*.(lfc_threshold)*
-                      ", Adjusted P < "*.(padj_threshold))
+    labs(
+      title = title,
+      subtitle = subtitle,
+      caption = caption,
+      x = x,
+      y = y_label,
+      color = "Significance"
     ) +
     
     # Theme
-    ggplot2::theme_minimal(base_size = 12) +
-    ggplot2::theme(
-      plot.title = ggplot2::element_text(hjust = 0.5, size = 14, face = "bold"),
-      plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 11, color = "gray30"),
-      plot.caption = ggplot2::element_text(hjust = 1, size = 9, color = "gray50"),
-      legend.position = "bottom",
-      panel.grid.minor = ggplot2::element_blank(),
-      panel.border = ggplot2::element_rect(color = "gray80", fill = NA, size = 0.5)
-    )
+    theme_classic(base_size = 12) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+      plot.subtitle = element_text(hjust = 0.5, size = 11),
+      plot.caption = element_text(hjust = 0.5, size = 9, style = "italic"),
+      legend.position = legendPosition,
+      legend.title = element_text(size = legendLabSize, face = "bold"),
+      panel.grid.major = if(gridlines.major) element_line(color = "grey90", size = 0.3) else element_blank(),
+      panel.grid.minor = if(gridlines.minor) element_line(color = "grey95", size = 0.2) else element_blank()
+    ) +
+    guides(color = guide_legend(override.aes = list(size = legendIconSize, alpha = 1)))
+  
+  # Save plot if requested
+  if (save_plot && !is.null(filename)) {
+    ggsave(filename, p, width = 10, height = 8, dpi = 300)
+    cat("Saved plot to:", filename, "\n")
+  }
   
   return(p)
+}
+
+# Helper operator for default values
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+
+# Updated create_multiple_volcano_plots function
+create_multiple_volcano_plots <- function(results_list, 
+                                         comparison_names = NULL,
+                                         highlight_genes = NULL,
+                                         padj_threshold = 0.05,
+                                         lfc_threshold = 1.0,
+                                         save_plots = TRUE,
+                                         plot_width = 10,
+                                         plot_height = 8) {
+  
+  if (is.null(comparison_names)) {
+    comparison_names <- names(results_list)
+  }
+  
+  volcano_plots <- list()
+  
+  for (i in seq_along(results_list)) {
+    cat("Creating volcano plot for:", comparison_names[i], "\n")
+    
+    volcano_plots[[i]] <- create_enhanced_volcano_deseq2(
+      deseq_results = results_list[[i]],
+      highlight_genes = highlight_genes,
+      comparison_name = comparison_names[i],
+      padj_threshold = padj_threshold,
+      lfc_threshold = lfc_threshold,
+      label_top_genes = 10
+    )
+    
+    if (save_plots) {
+      filename <- paste0("volcano_", gsub("[^A-Za-z0-9]", "_", comparison_names[i]), ".png")
+      ggplot2::ggsave(filename, volcano_plots[[i]], 
+                     width = plot_width, height = plot_height, dpi = 300)
+      cat("Saved:", filename, "\n")
+    }
+  }
+  
+  names(volcano_plots) <- comparison_names
+  return(volcano_plots)
 }
 
 # =============================================================================
