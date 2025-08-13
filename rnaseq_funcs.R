@@ -56,6 +56,7 @@ count_zeros <- function(x) {
 # Adapted from methylation analysis volcano plot
 
 # Enhanced create_enhanced_volcano_deseq2 function with EnhancedVolcano options
+# Enhanced create_enhanced_volcano_deseq2 function with EnhancedVolcano options
 create_enhanced_volcano_deseq2 <- function(deseq_results, 
                                            highlight_genes = NULL,
                                            comparison_name = "Comparison",
@@ -156,15 +157,15 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
       )
     )
   
-  # Set up colors (EnhancedVolcano order: NS, FC, P, FC_P)
+  # Set up colors (matching your original plot)
   colors <- c(
-    "Not significant" = col[1],           # grey30
-    "Significant (small effect)" = col[2], # forestgreen  
-    "Upregulated" = col[4],               # red2
-    "Downregulated" = col[3]              # royalblue
+    "Not significant" = "grey70",        # Light grey for NS points
+    "Significant (small effect)" = "#ff7f00",  # Orange for P-value only  
+    "Upregulated" = "#e31a1c",          # Red for significant up
+    "Downregulated" = "#e31a1c"         # Red for significant down (both directions same color)
   )
   
-  # Get top genes for labeling
+  # Get top genes for labeling (with yellow highlighting like your plot)
   if (label_top_genes > 0) {
     top_genes <- df %>%
       filter(significance %in% c("Upregulated", "Downregulated")) %>%
@@ -175,7 +176,7 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
   }
   
   # Count significant genes
-  sig_counts <- df %>% dplyr::count(significance)
+  sig_counts <- df %>% count(significance)
   up_count <- sig_counts$n[sig_counts$significance == "Upregulated"] %||% 0
   down_count <- sig_counts$n[sig_counts$significance == "Downregulated"] %||% 0
   
@@ -185,38 +186,34 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
   
   # Create the plot
   p <- ggplot(df, aes(x = !!sym(x), y = y_transformed)) +
+    # Add all points first
     geom_point(aes(color = significance), alpha = colAlpha, size = pointSize) +
+    
+    # Add yellow circles around top genes (like your plot)
+    {if (nrow(top_genes) > 0) {
+      geom_point(data = top_genes, 
+                 aes(x = !!sym(x), y = y_transformed),
+                 color = "gold", fill = "yellow", 
+                 shape = 21, size = pointSize + 2, stroke = 1.5, alpha = 0.8)
+    }} +
+    
     scale_color_manual(values = colors) +
     
     # Add threshold lines
-    {if (!is.null(hline)) geom_hline(yintercept = hline, linetype = "dashed", color = "black", alpha = 0.7)} +
-    {if (!is.null(vline)) geom_vline(xintercept = vline, linetype = "dashed", color = "black", alpha = 0.7)} +
-    {if (is.null(vline)) geom_vline(xintercept = c(-FCcutoff, FCcutoff), linetype = "dashed", color = "black", alpha = 0.7)} +
+    {if (!is.null(hline)) geom_hline(yintercept = hline, linetype = "dashed", color = "grey60", alpha = 0.8)} +
+    {if (!is.null(vline)) geom_vline(xintercept = vline, linetype = "dashed", color = "grey60", alpha = 0.8)} +
+    {if (is.null(vline)) geom_vline(xintercept = c(-FCcutoff, FCcutoff), linetype = "dashed", color = "grey60", alpha = 0.8)} +
     
-    # Add labels for top genes
-    {if (nrow(top_genes) > 0 && !drawConnectors) {
+    # Add labels for top genes (black text like your plot)
+    {if (nrow(top_genes) > 0) {
       geom_text_repel(
         data = top_genes,
         aes(label = lab),
         size = labSize,
-        color = labCol,
-        fontface = labFace,
-        box.padding = if(boxedLabels) 0.8 else 0.5,
-        point.padding = 0.3,
-        max.overlaps = 20
-      )
-    }} +
-    
-    # Add labels with connectors if requested
-    {if (nrow(top_genes) > 0 && drawConnectors) {
-      geom_text_repel(
-        data = top_genes,
-        aes(label = lab),
-        size = labSize,
-        color = labCol,
-        fontface = labFace,
-        box.padding = if(boxedLabels) 0.8 else 0.5,
-        point.padding = 0.3,
+        color = "black",
+        fontface = "bold",
+        box.padding = 0.5,
+        point.padding = 0.5,
         max.overlaps = 20,
         segment.color = 'black',
         segment.size = 0.3,
@@ -224,10 +221,11 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
       )
     }} +
     
-    # Gene count annotation
+    # Gene count annotation (like your plot style)
     annotate("text", x = Inf, y = Inf, 
-             label = paste0("Up: ", up_count, "\nDown: ", down_count),
-             hjust = 1.1, vjust = 1.1, size = 4, fontface = "bold") +
+             label = paste0("Significant DEGs: ", up_count + down_count, 
+                           " (", up_count, " up, ", down_count, " down) | Total genes: ", nrow(df)),
+             hjust = 1.02, vjust = 1.5, size = 3.5, color = "black") +
     
     # Set axis limits
     {if (!is.null(xlim)) scale_x_continuous(limits = xlim)} +
@@ -237,22 +235,24 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
     labs(
       title = title,
       subtitle = subtitle,
-      caption = caption,
-      x = x,
-      y = y_label,
+      caption = if(is.null(caption)) paste0("Significance thresholds: |log2FC| > ", FCcutoff, ", Adjusted P < ", pCutoff) else caption,
+      x = paste0("log2(Fold Change)"),
+      y = paste0("-log10(Adjusted P-value)"),
       color = "Significance"
     ) +
     
-    # Theme
+    # Theme (matching your plot)
     theme_classic(base_size = 12) +
     theme(
       plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
       plot.subtitle = element_text(hjust = 0.5, size = 11),
-      plot.caption = element_text(hjust = 0.5, size = 9, face = "italic"),
-      legend.position = legendPosition,
+      plot.caption = element_text(hjust = 1, size = 9, face = "italic", color = "grey50"),
+      legend.position = "bottom",
       legend.title = element_text(size = legendLabSize, face = "bold"),
-      panel.grid.major = if(gridlines.major) element_line(color = "grey90", size = 0.3) else element_blank(),
-      panel.grid.minor = if(gridlines.minor) element_line(color = "grey95", size = 0.2) else element_blank()
+      panel.grid.major = element_line(color = "grey90", size = 0.3),
+      panel.grid.minor = element_blank(),
+      axis.text = element_text(size = 10),
+      axis.title = element_text(size = 11, face = "bold")
     ) +
     guides(color = guide_legend(override.aes = list(size = legendIconSize, alpha = 1)))
   
@@ -264,6 +264,58 @@ create_enhanced_volcano_deseq2 <- function(deseq_results,
   
   return(p)
 }
+
+# Helper operator for default values
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
+
+# Updated create_multiple_volcano_plots function
+create_multiple_volcano_plots <- function(results_list, 
+                                         comparison_names = NULL,
+                                         highlight_genes = NULL,
+                                         padj_threshold = 0.05,
+                                         lfc_threshold = 1.0,
+                                         save_plots = TRUE,
+                                         plot_width = 10,
+                                         plot_height = 8) {
+  
+  if (is.null(comparison_names)) {
+    comparison_names <- names(results_list)
+  }
+  
+  volcano_plots <- list()
+  
+  for (i in seq_along(results_list)) {
+    cat("Creating volcano plot for:", comparison_names[i], "\n")
+    
+    volcano_plots[[i]] <- create_enhanced_volcano_deseq2(
+      deseq_results = results_list[[i]],
+      highlight_genes = highlight_genes,
+      comparison_name = comparison_names[i],
+      padj_threshold = padj_threshold,
+      lfc_threshold = lfc_threshold,
+      label_top_genes = 10
+    )
+    
+    if (save_plots) {
+      filename <- paste0("volcano_", gsub("[^A-Za-z0-9]", "_", comparison_names[i]), ".png")
+      ggplot2::ggsave(filename, volcano_plots[[i]], 
+                     width = plot_width, height = plot_height, dpi = 300)
+      cat("Saved:", filename, "\n")
+    }
+  }
+  
+  names(volcano_plots) <- comparison_names
+  return(volcano_plots)
+}
+
+# Test the function with your data
+# This should now work without the gene_id duplication error
+p_volcano <- create_enhanced_volcano_deseq2(
+  df.res1_ki_vs_k0.lfc,
+  comparison_name = "ki_vs_k0"
+)
+
+print(p_volcano)
 
 # Helper operator for default values
 `%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
