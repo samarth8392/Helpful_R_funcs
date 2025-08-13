@@ -308,18 +308,6 @@ create_multiple_volcano_plots <- function(results_list,
   return(volcano_plots)
 }
 
-# Test the function with your data
-# This should now work without the gene_id duplication error
-p_volcano <- create_enhanced_volcano_deseq2(
-  df.res1_ki_vs_k0.lfc,
-  comparison_name = "ki_vs_k0"
-)
-
-print(p_volcano)
-
-# Helper operator for default values
-`%||%` <- function(x, y) if (is.null(x) || length(x) == 0) y else x
-
 # Updated create_multiple_volcano_plots function
 create_multiple_volcano_plots <- function(results_list, 
                                          comparison_names = NULL,
