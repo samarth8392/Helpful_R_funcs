@@ -33,9 +33,21 @@ alter_fun = list(
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
               gp = gpar(fill = mutation_colors["Nonsense mutation"], col = NA))
   },
+  "Nonsense_Mutation" = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
+              gp = gpar(fill = mutation_colors["Nonsense mutation"], col = NA))
+  },
   "Missense Mutation" = function(x, y, w, h) {
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
               gp = gpar(fill = mutation_colors["Missense mutation"], col = NA))
+  },
+  "Missense_Mutation" = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
+              gp = gpar(fill = mutation_colors["Missense mutation"], col = NA))
+  },
+  "Frame_Shift_Del" = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
+              gp = gpar(fill = mutation_colors["Frameshift deletion"], col = NA))
   },
   "Frame Shift Del" = function(x, y, w, h) {
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
@@ -45,11 +57,19 @@ alter_fun = list(
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"), 
               gp = gpar(fill = mutation_colors["In frame insertion"], col = NA))
   },
+  "Splice_Site" = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"),
+              gp = gpar(fill = mutation_colors["Splice site"], col = NA))
+  },
   "Splice Site" = function(x, y, w, h) {
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"),
               gp = gpar(fill = mutation_colors["Splice site"], col = NA))
   },
   "Multi Hit" = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"),
+              gp = gpar(fill = mutation_colors["Multi hit mutation"], col = NA))
+  },
+  "Multi_Hit" = function(x, y, w, h) {
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"),
               gp = gpar(fill = mutation_colors["Multi hit mutation"], col = NA))
   },
@@ -62,6 +82,10 @@ alter_fun = list(
               gp = gpar(fill = mutation_colors["In frame deletion"], col = NA))
   },
   "Nonstop Mutation" = function(x, y, w, h) {
+    grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"),
+              gp = gpar(fill = mutation_colors["Nonstop mutation"], col = NA))
+  },
+  "Nonstop_Mutation" = function(x, y, w, h) {
     grid.rect(x, y, w-unit(0.5, "mm"), h-unit(0.5, "mm"),
               gp = gpar(fill = mutation_colors["Nonstop mutation"], col = NA))
   },
