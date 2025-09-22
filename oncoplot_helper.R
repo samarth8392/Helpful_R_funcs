@@ -1,4 +1,4 @@
-mutation_colors <- <- c(
+mutation_colors <- c(
   "Nonsense mutation" = "#ad7aff",
   "Nonsense_Mutation" = "#ad7aff", 
   "Missense mutation" = "#377EB8",
