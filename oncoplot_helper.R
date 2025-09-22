@@ -11,6 +11,7 @@ mutation_colors <- c(
   "Splice Site" = "#FF7F00", 
   "Splice_Site" = "#FF7F00",
   "Splice Site" = "#FF7F00",
+  "Splice site" = "#FF7F00",
   "Multi Hit" = "#FFFF33",
   "Multi_Hit" = "#FFFF33",
   "Multi hit mutation" = "#FFFF33",
