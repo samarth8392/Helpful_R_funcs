@@ -9,6 +9,7 @@ mutation_colors <- c(
   "In_Frame_Ins" = "#ff008c",
   "Splice Site" = "#FF7F00", 
   "Splice_Site" = "#FF7F00",
+  "Splice Site" = "#FF7F00",
   "Multi Hit" = "#FFFF33",
   "Multi_Hit" = "#FFFF33",
   "Frameshift insertion" = "#A65628",
