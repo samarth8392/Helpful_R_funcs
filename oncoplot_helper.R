@@ -18,6 +18,7 @@ mutation_colors <- c(
   "Translation Start site" = "#400085",
   "Translation_Start_Site" = "#400085",
   "Nonstop Mutation" = "#b68dfc",
+  "Nonstop_Mutation" = "#b68dfc",
   "Amplification" = "red",
   "Deletion" = "blue",
   "Splice Region" = "red",
